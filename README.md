@@ -157,6 +157,7 @@ logging:
 - **noise**: Add Gaussian noise (supports `scope: region|global`)
 - **warp**: Mild geometric warping (supports `scope: region|global`)
 - **texture**: Overlay texture maps (grain, scratches, dirt)
+- **learned**: Renders a pattern learned by `advplate optimize` from a saved genome (see below)
 
 **Scope Parameter**: All perturbations support a `scope` parameter:
 - `scope: region` (default): Apply only to the license plate area
@@ -185,6 +186,58 @@ logging:
 - `--verbose` - Enable verbose logging
 - `--debug` - Enable debug logging with full stack traces
 - `--dry-run` - Preview generation plan without creating files
+
+## 🎯 Pattern Optimization
+
+PlateShapez can learn a near-invisible adversarial overlay pattern by querying a live ALPR
+engine as a black-box oracle, instead of relying solely on hand-tuned perturbations. Each
+candidate pattern is classified into one of three outcomes:
+
+- **Class A** — the plate wasn't detected at all
+- **Class B** — detected but misread
+- **Class C** — read correctly (control)
+
+This feature is **optional** and depends on the companion
+[`alprg`](https://github.com/benjordan/alprovingground) package, which is not installed by
+default:
+
+```bash
+# Install the optimizer's dependency (resolves alprg from a sibling checkout by default;
+# see pyproject.toml's [tool.uv.sources] to point at a different alprg source)
+uv sync --extra optimize
+
+# Run a search using the deterministic fake engine (no GPU/ALPR install required)
+uv run advplate optimize \
+  --background backgrounds/car1.jpg \
+  --overlay overlays/plate1.png \
+  --out optimization_runs/run1 \
+  --engines fake \
+  --budget 200 \
+  --expected-text ABC123
+
+# Against real engines (requires fast_alpr and/or OpenALPR installed -- see alprg's docs)
+uv run advplate optimize --background bg.jpg --overlay plate.png --out optimization_runs/run1 \
+  --engines fast_alpr --budget 500 --expected-text ABC123
+```
+
+Each run writes to `--out`:
+- `best_pattern.png` — the best pattern found, rendered at the overlay's size
+- `best_genome.npy` — the raw genome (feed this into the `learned` perturbation below)
+- `result.json` — best score, number of oracle queries used, and score history
+- `query_log.jsonl` — every genome queried and the oracle's response, one JSON object per line
+
+Feed the learned pattern back into normal dataset generation via the `learned` perturbation:
+
+```yaml
+perturbations:
+  - name: learned
+    params:
+      genome_path: optimization_runs/run1/best_genome.npy
+      strength: 0.6
+```
+
+If `alprg` isn't installed, `advplate optimize` exits with a friendly "Missing dependency"
+message (and a tip to run `uv sync --extra optimize`) instead of a stack trace.
 
 ## 📁 Output Structure
 

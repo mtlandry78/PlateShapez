@@ -27,6 +27,7 @@ Commands:
   list      List available perturbations
   info      Show merged configuration (defaults < file < CLI)
   generate  Generate adversarial dataset
+  optimize  Optimize a near-invisible adversarial pattern against a live ALPR oracle
   demo      Run interactive demo with synthetic images
   examples  Print example configuration YAML
   version   Show version info
@@ -68,6 +69,23 @@ Run interactive demo with synthetic images.
 
 Options:
   --cleanup               Clean up demo files after completion
+  --help                  Show this message and exit""",
+        "optimize": """Usage: advplate optimize [OPTIONS]
+
+Optimize a near-invisible adversarial pattern against a live ALPR oracle.
+Requires the 'optimize' extra (uv sync --extra optimize) for the alprg
+dependency.
+
+Options:
+  --background PATH       Path to background image (required)
+  --overlay PATH           Path to plate overlay image (required)
+  --out PATH                Output directory for the optimization run (required)
+  --expected-text TEXT     Ground-truth plate text (omit for unsupervised agreement)
+  --budget INTEGER         Override max oracle queries
+  --strength FLOAT         Override pattern blend strength (0-1)
+  --engines TEXT           Comma-separated ALPR engine names (e.g. 'fake', 'fast_alpr,openalpr')
+  --seed INTEGER           Random seed for the optimizer
+  -c, --config PATH       Path to config file
   --help                  Show this message and exit""",
     }
     help_text = help_texts.get(command_name, "No help available for this command.")
@@ -196,6 +214,100 @@ def generate(
         if debug:
             console.print_exception()
         _print_command_help("generate")
+        raise typer.Exit(1)
+
+
+@app.command()
+def optimize(
+    background: Path = typer.Option(..., "--background", help="Path to background image"),
+    overlay: Path = typer.Option(..., "--overlay", help="Path to plate overlay image"),
+    out: Path = typer.Option(..., "--out", help="Output directory for the optimization run"),
+    expected_text: Optional[str] = typer.Option(
+        None, "--expected-text", help="Ground-truth plate text (omit for unsupervised agreement)"
+    ),
+    budget: Optional[int] = typer.Option(None, "--budget", help="Override max oracle queries"),
+    strength: Optional[float] = typer.Option(
+        None, "--strength", help="Override pattern blend strength (0-1)"
+    ),
+    engines: Optional[str] = typer.Option(
+        None,
+        "--engines",
+        help="Comma-separated ALPR engine names (e.g. 'fake', 'fast_alpr,openalpr')",
+    ),
+    seed: Optional[int] = typer.Option(None, "--seed", help="Random seed for the optimizer"),
+    config: Optional[Path] = typer.Option(None, "--config", "-c", help="Path to config file"),
+) -> None:
+    """Optimize a near-invisible adversarial pattern against a live ALPR oracle."""
+    try:
+        cfg = load_config(str(config) if config else None)
+        opt_cfg = cfg.get("optimization", {})
+
+        from plateshapez.optim.es_optimizer import EvolutionStrategyOptimizer
+        from plateshapez.optim.pattern import PatternSpec
+        from plateshapez.optim.runner import run_optimization
+
+        engine_list = (
+            [e.strip() for e in engines.split(",") if e.strip()]
+            if engines
+            else opt_cfg.get("engines")
+        )
+
+        pattern_cfg = opt_cfg.get("pattern", {})
+        spec = PatternSpec(
+            n_basis_x=int(pattern_cfg.get("n_basis_x", 8)),
+            n_basis_y=int(pattern_cfg.get("n_basis_y", 8)),
+            n_channels=int(pattern_cfg.get("n_channels", 3)),
+            grid_size=tuple(pattern_cfg.get("grid_size", (64, 64))),
+        )
+
+        optimizer_cfg = opt_cfg.get("optimizer", {})
+        es_optimizer = EvolutionStrategyOptimizer(
+            population_size=int(optimizer_cfg.get("population_size", 16)),
+            elite_fraction=float(optimizer_cfg.get("elite_fraction", 0.25)),
+            initial_sigma=float(optimizer_cfg.get("initial_sigma", 0.5)),
+            sigma_decay=float(optimizer_cfg.get("sigma_decay", 0.98)),
+            seed=seed,
+        )
+
+        result = run_optimization(
+            background_path=background,
+            overlay_path=overlay,
+            out_dir=out,
+            expected_text=expected_text,
+            budget=budget if budget is not None else int(opt_cfg.get("budget", 500)),
+            strength=strength if strength is not None else float(opt_cfg.get("strength", 0.6)),
+            pattern_spec=spec,
+            optimizer=es_optimizer,
+            engines=engine_list,
+        )
+
+        console.print(
+            f"[bold green]✓ Optimization complete![/] "
+            f"best_score={result.best_score:.3f} n_queries={result.n_queries}"
+        )
+        console.print(f"[dim]Results saved to: {out}[/]")
+
+    except ImportError as e:
+        console.print(f"[red]Missing dependency: {e}[/]")
+        console.print(
+            "[yellow]Tip: run 'uv sync --extra optimize' to install the optimizer's "
+            "alprg dependency[/]"
+        )
+        _print_command_help("optimize")
+        raise typer.Exit(1)
+    except FileNotFoundError as e:
+        console.print(f"[red]File not found: {e}[/]")
+        _print_command_help("optimize")
+        raise typer.Exit(1)
+    except ValueError as e:
+        console.print(f"[red]Configuration error: {e}[/]")
+        _print_command_help("optimize")
+        raise typer.Exit(1)
+    except typer.Exit:
+        raise
+    except Exception as e:
+        console.print(f"[red]Unexpected error: {e}[/]")
+        _print_command_help("optimize")
         raise typer.Exit(1)
 
 

@@ -14,8 +14,20 @@ dependencies = [
     "types-pyyaml>=6.0.12.20250822",
 ]
 
+[project.optional-dependencies]
+# Pulls in the multi-engine ALPR harness used as the `advplate optimize`
+# oracle. Core alprg deps are just numpy+pillow (no GPU required) -- the
+# FakeEngine is enough to run the optimizer end to end without real ALPR.
+optimize = ["alprg"]
+# Same, plus a real (GPU) ALPR engine for actually-meaningful optimization runs.
+optimize-gpu = ["alprg[fast-alpr]"]
+
 [tool.uv]
 package = true
+
+[tool.uv.sources]
+# Sibling repo in this sandbox; swap for a git dependency for CI/publish.
+alprg = { path = "../ALPRovingGround", editable = true }
 
 [project.scripts]
 # Run with: uv run dev <command>
@@ -31,6 +43,11 @@ dev = [
   "pre-commit>=3.7",
   "types-pillow>=10.2.0.20240822",
   "pytest>=8.4.1",
+]
+
+[tool.pytest.ini_options]
+markers = [
+  "requires_optimize: requires the optional alprg dependency (uv sync --extra optimize)",
 ]
 
 [tool.ruff]
@@ -63,3 +80,9 @@ pretty = true
 mypy_path = "src"
 namespace_packages = true
 explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+# alprg is an optional dependency (uv sync --extra optimize); CI's default
+# `uv sync --group dev` does not install it.
+module = ["alprg.*"]
+ignore_missing_imports = true

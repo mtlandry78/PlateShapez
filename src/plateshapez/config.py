@@ -27,6 +27,18 @@ DEFAULTS: dict[str, Any] = {
         {"name": "noise", "params": {"intensity": 25}},
     ],
     "logging": {"level": "INFO", "save_metadata": True},
+    "optimization": {
+        "budget": 500,
+        "strength": 0.6,
+        "engines": None,
+        "pattern": {"n_basis_x": 8, "n_basis_y": 8, "n_channels": 3, "grid_size": [64, 64]},
+        "optimizer": {
+            "population_size": 16,
+            "elite_fraction": 0.25,
+            "initial_sigma": 0.5,
+            "sigma_decay": 0.98,
+        },
+    },
 }
 
 
