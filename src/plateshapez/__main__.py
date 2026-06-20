@@ -15,6 +15,14 @@ from plateshapez.config import load_config
 from plateshapez.perturbations.base import PERTURBATION_REGISTRY
 from plateshapez.pipeline import DatasetGenerator
 
+# Windows consoles default to cp1252, which can't encode the status glyphs (✓, 🎉)
+# this CLI prints, crashing with UnicodeEncodeError. Force UTF-8 on the output streams
+# so every print path (Rich console and plain print) is safe regardless of platform.
+for _stream in (sys.stdout, sys.stderr):
+    _reconfigure = getattr(_stream, "reconfigure", None)
+    if _reconfigure is not None:
+        _reconfigure(encoding="utf-8")
+
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 console = Console()
 

@@ -54,6 +54,7 @@ class TestOptimizeCLI:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             cwd=str(REPO_ROOT),
         )
 
@@ -69,6 +70,7 @@ class TestOptimizeCLI:
             ["uv", "run", "python", "-m", "plateshapez", "optimize", "--help"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             cwd=str(REPO_ROOT),
         )
         assert result.returncode == 0
