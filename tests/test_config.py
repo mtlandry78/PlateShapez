@@ -1,11 +1,29 @@
 import json
 import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 import yaml
 
 from plateshapez.config import DEFAULTS, load_config
+
+
+@contextmanager
+def temp_config_file(content: str, suffix: str) -> Iterator[str]:
+    """Write ``content`` to a temp file, yield its path, then remove it.
+
+    The handle is closed before yielding so Windows — which locks open files —
+    can reopen and delete it. On POSIX this is equally valid.
+    """
+    with tempfile.NamedTemporaryFile(mode="w", suffix=suffix, delete=False) as f:
+        f.write(content)
+        path = f.name
+    try:
+        yield path
+    finally:
+        Path(path).unlink(missing_ok=True)
 
 
 class TestConfigSystem:
@@ -22,17 +40,16 @@ class TestConfigSystem:
 
     def test_yaml_config_file_loading(self):
         """Test loading YAML configuration files."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            yaml_config = {
+        content = yaml.dump(
+            {
                 "dataset": {
                     "n_variants": 25,
                     "backgrounds": "./custom_bg",
                 }
             }
-            yaml.dump(yaml_config, f)
-            f.flush()
-
-            cfg = load_config(f.name)
+        )
+        with temp_config_file(content, ".yaml") as path:
+            cfg = load_config(path)
 
             # Should merge with defaults
             assert cfg["dataset"]["n_variants"] == 25
@@ -41,21 +58,18 @@ class TestConfigSystem:
             assert cfg["dataset"]["random_seed"] == 1337
             assert cfg["dataset"]["overlays"] == "./overlays"
 
-            Path(f.name).unlink()
-
     def test_json_config_file_loading(self):
         """Test loading JSON configuration files."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json_config = {
+        content = json.dumps(
+            {
                 "dataset": {
                     "output": "./custom_output",
                     "random_seed": 9999,
                 }
             }
-            json.dump(json_config, f)
-            f.flush()
-
-            cfg = load_config(f.name)
+        )
+        with temp_config_file(content, ".json") as path:
+            cfg = load_config(path)
 
             # Should merge with defaults
             assert cfg["dataset"]["output"] == "./custom_output"
@@ -63,25 +77,20 @@ class TestConfigSystem:
             # Defaults should still be present
             assert cfg["dataset"]["n_variants"] == 10
 
-            Path(f.name).unlink()
-
     def test_cli_overrides_precedence(self):
         """Test that CLI overrides have highest precedence."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            yaml_config = {
+        content = yaml.dump(
+            {
                 "dataset": {
                     "n_variants": 50,
                 }
             }
-            yaml.dump(yaml_config, f)
-            f.flush()
-
+        )
+        with temp_config_file(content, ".yaml") as path:
             # CLI override should win
-            cfg = load_config(f.name, cli_overrides={"n_variants": 100})
+            cfg = load_config(path, cli_overrides={"n_variants": 100})
 
             assert cfg["dataset"]["n_variants"] == 100
-
-            Path(f.name).unlink()
 
     def test_verbose_debug_cli_overrides(self):
         """Test that verbose/debug flags affect logging level."""
@@ -98,19 +107,14 @@ class TestConfigSystem:
 
     def test_unsupported_config_format_raises_error(self):
         """Test that unsupported config formats raise ValueError."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-            f.write("not a config file")
-            f.flush()
-
+        with temp_config_file("not a config file", ".txt") as path:
             with pytest.raises(ValueError, match="Unsupported config format"):
-                load_config(f.name)
-
-            Path(f.name).unlink()
+                load_config(path)
 
     def test_deep_merge_behavior(self):
         """Test that deep merging works correctly for top-level sections."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            yaml_config = {
+        content = yaml.dump(
+            {
                 "dataset": {
                     "n_variants": 30,  # Override this
                     # Don't specify other dataset fields
@@ -118,10 +122,9 @@ class TestConfigSystem:
                 "perturbations": [{"name": "custom", "params": {"value": 123}}],
                 # Don't specify logging section
             }
-            yaml.dump(yaml_config, f)
-            f.flush()
-
-            cfg = load_config(f.name)
+        )
+        with temp_config_file(content, ".yaml") as path:
+            cfg = load_config(path)
 
             # Dataset section should be merged
             assert cfg["dataset"]["n_variants"] == 30  # Overridden
@@ -137,13 +140,11 @@ class TestConfigSystem:
             assert cfg["logging"]["level"] == "INFO"
             assert cfg["logging"]["save_metadata"] is True
 
-            Path(f.name).unlink()
-
     def test_deep_merge_nested_perturbation_params(self):
         """Test that config loading properly deep merges nested perturbation dictionaries."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            # Config with nested perturbation parameters that should be deep merged
-            yaml_config = {
+        # Config with nested perturbation parameters that should be deep merged
+        content = yaml.dump(
+            {
                 "dataset": {
                     "n_variants": 5,
                     # Only override some dataset fields
@@ -165,10 +166,9 @@ class TestConfigSystem:
                     },
                 ],
             }
-            yaml.dump(yaml_config, f)
-            f.flush()
-
-            cfg = load_config(f.name)
+        )
+        with temp_config_file(content, ".yaml") as path:
+            cfg = load_config(path)
 
             # Dataset should be deep merged
             assert cfg["dataset"]["n_variants"] == 5  # Overridden
@@ -190,5 +190,3 @@ class TestConfigSystem:
             assert noise_pert["params"]["intensity"] == 25  # Overridden
             # No other params should be present
             assert len(noise_pert["params"]) == 1
-
-            Path(f.name).unlink()

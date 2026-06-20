@@ -48,6 +48,7 @@ class TestCLIIntegration:
             ["uv", "run", "python", "-m", "plateshapez", "list"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             cwd=str(REPO_ROOT),
         )
 
@@ -66,6 +67,7 @@ class TestCLIIntegration:
             ["uv", "run", "python", "-m", "plateshapez", "version"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             cwd=str(REPO_ROOT),
         )
 
@@ -78,6 +80,7 @@ class TestCLIIntegration:
             ["uv", "run", "python", "-m", "plateshapez", "info"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             cwd=str(REPO_ROOT),
         )
 
@@ -107,6 +110,7 @@ class TestCLIIntegration:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             cwd=str(REPO_ROOT),
         )
 
@@ -126,9 +130,9 @@ class TestCLIIntegration:
         config_file = sample_data["temp_dir"] / "config.yaml"
         config_content = f"""
 dataset:
-  backgrounds: "{sample_data["bg_dir"]}"
-  overlays: "{sample_data["overlay_dir"]}"
-  output: "{output_dir}"
+  backgrounds: "{sample_data["bg_dir"].as_posix()}"
+  overlays: "{sample_data["overlay_dir"].as_posix()}"
+  output: "{output_dir.as_posix()}"
   n_variants: 2
   random_seed: 42
 
@@ -145,6 +149,7 @@ perturbations:
             ["uv", "run", "python", "-m", "plateshapez", "generate", "--config", str(config_file)],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             cwd=str(REPO_ROOT),
         )
 
@@ -210,6 +215,7 @@ perturbations:
             ["uv", "run", "python", "-m", "plateshapez", "generate", "--n_variants", "1"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             cwd=str(REPO_ROOT),
         )
 
@@ -226,9 +232,9 @@ perturbations:
         config_file = sample_data["temp_dir"] / "config.yaml"
         config_content = f"""
 dataset:
-  backgrounds: "{sample_data["bg_dir"]}"
-  overlays: "{sample_data["overlay_dir"]}"
-  output: "{sample_data["temp_dir"] / "output"}"
+  backgrounds: "{sample_data["bg_dir"].as_posix()}"
+  overlays: "{sample_data["overlay_dir"].as_posix()}"
+  output: "{(sample_data["temp_dir"] / "output").as_posix()}"
   n_variants: 1
 """
         config_file.write_text(config_content)
@@ -248,6 +254,7 @@ dataset:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             cwd=str(REPO_ROOT),
         )
 
@@ -268,9 +275,9 @@ dataset:
         # Create identical config for both runs
         config_content1 = f"""
 dataset:
-  backgrounds: "{sample_data["bg_dir"]}"
-  overlays: "{sample_data["overlay_dir"]}"
-  output: "{output_dir1}"
+  backgrounds: "{sample_data["bg_dir"].as_posix()}"
+  overlays: "{sample_data["overlay_dir"].as_posix()}"
+  output: "{output_dir1.as_posix()}"
   n_variants: 2
   random_seed: 12345
 
@@ -287,9 +294,9 @@ perturbations:
 
         config_content2 = f"""
 dataset:
-  backgrounds: "{sample_data["bg_dir"]}"
-  overlays: "{sample_data["overlay_dir"]}"
-  output: "{output_dir2}"
+  backgrounds: "{sample_data["bg_dir"].as_posix()}"
+  overlays: "{sample_data["overlay_dir"].as_posix()}"
+  output: "{output_dir2.as_posix()}"
   n_variants: 2
   random_seed: 12345
 
@@ -314,6 +321,7 @@ perturbations:
             ["uv", "run", "python", "-m", "plateshapez", "generate", "--config", str(config_file1)],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             cwd=str(REPO_ROOT),
         )
 
@@ -322,6 +330,7 @@ perturbations:
             ["uv", "run", "python", "-m", "plateshapez", "generate", "--config", str(config_file2)],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             cwd=str(REPO_ROOT),
         )
 
