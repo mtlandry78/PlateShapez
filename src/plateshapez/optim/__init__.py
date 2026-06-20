@@ -10,6 +10,7 @@ from plateshapez.optim.es_optimizer import EvolutionStrategyOptimizer
 from plateshapez.optim.oracle import ALPRGOracle
 from plateshapez.optim.pattern import PatternSpec, blend_pattern
 from plateshapez.optim.runner import run_optimization
+from plateshapez.optim.surrogate_optimizer import SurrogatePatternOptimizer
 
 __all__ = [
     "PatternSpec",
@@ -21,6 +22,7 @@ __all__ = [
     "PatternOptimizer",
     "QueryLogger",
     "EvolutionStrategyOptimizer",
+    "SurrogatePatternOptimizer",
     "ALPRGOracle",
     "run_optimization",
 ]

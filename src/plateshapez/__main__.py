@@ -92,6 +92,7 @@ Options:
   --budget INTEGER         Override max oracle queries
   --strength FLOAT         Override pattern blend strength (0-1)
   --engines TEXT           Comma-separated ALPR engine names (e.g. 'fake', 'fast_alpr,openalpr')
+  --optimizer TEXT         Optimizer: 'es' (default) or 'surrogate' (needs the surrogate extra)
   --seed INTEGER           Random seed for the optimizer
   -c, --config PATH       Path to config file
   --help                  Show this message and exit""",
@@ -242,6 +243,11 @@ def optimize(
         "--engines",
         help="Comma-separated ALPR engine names (e.g. 'fake', 'fast_alpr,openalpr')",
     ),
+    optimizer: Optional[str] = typer.Option(
+        None,
+        "--optimizer",
+        help="Optimizer to use: 'es' (gradient-free, default) or 'surrogate' (PyTorch)",
+    ),
     seed: Optional[int] = typer.Option(None, "--seed", help="Random seed for the optimizer"),
     config: Optional[Path] = typer.Option(None, "--config", "-c", help="Path to config file"),
 ) -> None:
@@ -250,6 +256,7 @@ def optimize(
         cfg = load_config(str(config) if config else None)
         opt_cfg = cfg.get("optimization", {})
 
+        from plateshapez.optim.base import PatternOptimizer
         from plateshapez.optim.es_optimizer import EvolutionStrategyOptimizer
         from plateshapez.optim.pattern import PatternSpec
         from plateshapez.optim.runner import run_optimization
@@ -268,14 +275,35 @@ def optimize(
             grid_size=tuple(pattern_cfg.get("grid_size", (64, 64))),
         )
 
-        optimizer_cfg = opt_cfg.get("optimizer", {})
-        es_optimizer = EvolutionStrategyOptimizer(
-            population_size=int(optimizer_cfg.get("population_size", 16)),
-            elite_fraction=float(optimizer_cfg.get("elite_fraction", 0.25)),
-            initial_sigma=float(optimizer_cfg.get("initial_sigma", 0.5)),
-            sigma_decay=float(optimizer_cfg.get("sigma_decay", 0.98)),
-            seed=seed,
-        )
+        optimizer_kind = (optimizer or opt_cfg.get("optimizer_kind", "es")).strip().lower()
+        chosen_optimizer: PatternOptimizer
+        if optimizer_kind == "surrogate":
+            from plateshapez.optim.surrogate_optimizer import SurrogatePatternOptimizer
+
+            surrogate_cfg = opt_cfg.get("surrogate", {})
+            chosen_optimizer = SurrogatePatternOptimizer(
+                bootstrap_fraction=float(surrogate_cfg.get("bootstrap_fraction", 0.25)),
+                proposals_per_round=int(surrogate_cfg.get("proposals_per_round", 8)),
+                hidden_sizes=tuple(surrogate_cfg.get("hidden_sizes", (64, 64))),
+                epochs=int(surrogate_cfg.get("epochs", 300)),
+                learning_rate=float(surrogate_cfg.get("learning_rate", 0.01)),
+                weight_decay=float(surrogate_cfg.get("weight_decay", 0.0001)),
+                proposal_steps=int(surrogate_cfg.get("proposal_steps", 100)),
+                proposal_lr=float(surrogate_cfg.get("proposal_lr", 0.05)),
+                exploration_sigma=float(surrogate_cfg.get("exploration_sigma", 0.1)),
+                seed=seed,
+            )
+        elif optimizer_kind == "es":
+            optimizer_cfg = opt_cfg.get("optimizer", {})
+            chosen_optimizer = EvolutionStrategyOptimizer(
+                population_size=int(optimizer_cfg.get("population_size", 16)),
+                elite_fraction=float(optimizer_cfg.get("elite_fraction", 0.25)),
+                initial_sigma=float(optimizer_cfg.get("initial_sigma", 0.5)),
+                sigma_decay=float(optimizer_cfg.get("sigma_decay", 0.98)),
+                seed=seed,
+            )
+        else:
+            raise ValueError(f"Unknown optimizer '{optimizer_kind}'. Choose 'es' or 'surrogate'.")
 
         result = run_optimization(
             background_path=background,
@@ -285,7 +313,7 @@ def optimize(
             budget=budget if budget is not None else int(opt_cfg.get("budget", 500)),
             strength=strength if strength is not None else float(opt_cfg.get("strength", 0.6)),
             pattern_spec=spec,
-            optimizer=es_optimizer,
+            optimizer=chosen_optimizer,
             engines=engine_list,
         )
 

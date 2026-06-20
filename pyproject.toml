@@ -21,6 +21,10 @@ dependencies = [
 optimize = ["alprg"]
 # Same, plus a real (GPU) ALPR engine for actually-meaningful optimization runs.
 optimize-gpu = ["alprg[fast-alpr]"]
+# PyTorch differentiable-surrogate optimizer (Phase B). Heavy dependency kept
+# optional and imported lazily, exactly like `alprg` -- core/CLI paths and the
+# `es` optimizer work with zero torch installed.
+surrogate = ["torch"]
 
 [tool.uv]
 package = true
@@ -48,6 +52,7 @@ dev = [
 [tool.pytest.ini_options]
 markers = [
   "requires_optimize: requires the optional alprg dependency (uv sync --extra optimize)",
+  "requires_surrogate: requires the optional torch dependency (uv sync --extra surrogate)",
 ]
 
 [tool.ruff]
@@ -85,4 +90,10 @@ explicit_package_bases = true
 # alprg is an optional dependency (uv sync --extra optimize); CI's default
 # `uv sync --group dev` does not install it.
 module = ["alprg.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# torch is an optional dependency (uv sync --extra surrogate); CI's default
+# `uv sync --group dev` does not install it, so let mypy pass without it.
+module = ["torch.*"]
 ignore_missing_imports = true
